@@ -1,64 +1,73 @@
 from __future__ import annotations
 
-from app.exchange.market_data import MarketData
-from app.indicators.ema_indicator import EMAIndicator
-from app.models.signal import Signal
-from app.risk.risk_manager import RiskManager
-from app.services.order_service import OrderService
-from app.strategies.ema_strategy import EMAStrategy
+import time
 
-from datetime import UTC, datetime, timedelta
+from app.models.order_request import OrderRequest
+from app.models.signal import Signal
 
 class TradingBot:
     """
-    Main trading engine.
+    Main trading bot.
     """
 
     def __init__(
         self,
-        market_data: MarketData,
-        indicator: EMAIndicator,
-        strategy: EMAStrategy,
-        risk_manager: RiskManager,
-        order_service: OrderService,
+        settings,
+        market_data,
+        indicator,
+        strategy,
+        risk_manager,
+        order_service,
     ) -> None:
-
-        self._market = market_data
+        self._settings = settings
+        self._market_data = market_data
         self._indicator = indicator
         self._strategy = strategy
-        self._risk = risk_manager
-        self._orders = order_service
-
-
+        self._risk_manager = risk_manager
+        self._order_service = order_service
 
     def run(self) -> None:
 
-        end = datetime.now(UTC)
+        end = int(time.time())
+        start = end - (200 * 60)
 
-        start = end - timedelta(hours=2)
-
-        candles = self._market.get_candles(
-            symbol="BTCUSD",
-            resolution="1m",
-            start=int(start.timestamp()),
-            end=int(end.timestamp()),
+        candles = self._market_data.get_candles(
+            symbol=self._settings.symbol,
+            resolution=self._settings.timeframe,
+            start=start,
+            end=end,
         )
 
         candles = self._indicator.calculate(candles)
 
         signal = self._strategy.generate_signal(candles)
 
-        allowed, reason = self._risk.can_trade()
-
         print("=" * 70)
-        print(f"Signal : {signal.value}")
-        print(f"Risk   : {reason}")
-        print("=" * 70)
+        print(f"Symbol     : {self._settings.symbol}")
+        print(f"Timeframe  : {self._settings.timeframe}")
+        print(f"Signal     : {signal.name}")
 
-        if not allowed:
+        if not self._risk_manager.can_trade():
+
+            print("Risk       : Trading blocked.")
             return
 
-        if signal == Signal.HOLD:
+        print("Risk       : Trading allowed.")
+        print("=" * 70)
+
+        if signal is Signal.HOLD:
+            print("No trade opportunity.")
             return
 
-        print("Ready to place order...")
+        order = OrderRequest(
+            symbol=self._settings.symbol,
+            side=signal.name,
+            size=1,
+            order_type="market",
+            leverage=1,
+        )
+
+        response = self._order_service.execute(order)
+
+        print()
+        print(response)

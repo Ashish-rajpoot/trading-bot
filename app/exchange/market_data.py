@@ -1,80 +1,119 @@
 from __future__ import annotations
 
-from typing import Any
-
-from app.api.client import DeltaRestClient
+from datetime import datetime
 
 import pandas as pd
 
+from app.api.client import DeltaRestClient
+
+
 class MarketData:
     """
-    Client for Delta Exchange Market Data API.
+    Handles historical market data retrieval.
     """
 
     def __init__(self, client: DeltaRestClient) -> None:
         self._client = client
 
-    def get_ticker(self, symbol: str) -> dict[str, Any]:
-        """
-        Get ticker for a trading symbol.
-        """
-        return self._client.get(
-            endpoint="/v2/tickers",
-            params={
-                "symbol": symbol,
-            },
-        )
-
-    def get_orderbook(
+    def get_candles(
         self,
         symbol: str,
-    ) -> dict[str, Any]:
+        resolution: str,
+        start: int,
+        end: int,
+    ) -> pd.DataFrame:
         """
-        Get order book.
+        Fetch historical candle data.
+
+        Returns
+        -------
+        pandas.DataFrame
+            OHLCV dataframe sorted by time.
         """
-        return self._client.get(
-            endpoint="/v2/l2orderbook",
+
+        response = self._client.get(
+            endpoint="/v2/history/candles",
             params={
                 "symbol": symbol,
+                "resolution": resolution,
+                "start": start,
+                "end": end,
             },
         )
 
-    def get_candles(
-            self,
-            symbol: str,
-            resolution: str,
-            start: int,
-            end: int,
-        ) -> pd.DataFrame:
+        result = response.get("result")
 
-            response = self._client.get(
-                endpoint="/v2/history/candles",
-                params={
-                    "symbol": symbol,
-                    "resolution": resolution,
-                    "start": start,
-                    "end": end,
-                },
+        if not result:
+            raise ValueError(
+                f"No candle data returned for symbol '{symbol}'."
             )
 
-            df = pd.DataFrame(response["result"])
+        df = pd.DataFrame(result)
 
-            df["time"] = pd.to_datetime(
-                df["time"],
-                unit="s",
-                utc=True,
+        required_columns = [
+            "time",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+        ]
+
+        missing = [
+            column
+            for column in required_columns
+            if column not in df.columns
+        ]
+
+        if missing:
+            raise ValueError(
+                f"Missing candle columns: {missing}"
             )
 
-            numeric_columns = [
-                "open",
-                "high",
-                "low",
-                "close",
-                "volume",
-            ]
+        df["time"] = pd.to_datetime(
+            df["time"],
+            unit="s",
+            utc=True,
+        )
 
-            df[numeric_columns] = df[numeric_columns].astype(float)
+        numeric_columns = [
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+        ]
 
-            df = df.sort_values("time").reset_index(drop=True)
+        df[numeric_columns] = (
+            df[numeric_columns]
+            .apply(pd.to_numeric, errors="coerce")
+        )
 
-            return df
+        df = df.dropna()
+
+        df = (
+            df.sort_values("time")
+              .reset_index(drop=True)
+        )
+
+        return df
+
+    def latest_candle(
+        self,
+        symbol: str,
+        resolution: str,
+        start: int,
+        end: int,
+    ) -> pd.Series:
+        """
+        Return the latest candle.
+        """
+
+        candles = self.get_candles(
+            symbol=symbol,
+            resolution=resolution,
+            start=start,
+            end=end,
+        )
+
+        return candles.iloc[-1]

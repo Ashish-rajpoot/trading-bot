@@ -9,7 +9,8 @@ from app.risk.risk_config import RiskConfig
 from app.risk.risk_manager import RiskManager
 from app.services.order_service import OrderService
 from app.strategies.ema_strategy import EMAStrategy
-
+from app.execution.execution_engine import ExecutionEngine
+from app.services.trade_journal import TradeJournal
 
 client = DeltaRestClient(settings.base_url)
 
@@ -19,7 +20,15 @@ orders = Orders(client)
 
 products = Products(client)
 
+journal = TradeJournal()
+
+engine = ExecutionEngine(
+    order_service=service,
+    trade_journal=journal,
+)
+
 service = OrderService(
+    settings=settings,
     orders=orders,
     products=products,
 )
@@ -29,6 +38,7 @@ risk = RiskManager(
 )
 
 bot = TradingBot(
+    settings=settings,
     market_data=market,
     indicator=EMAIndicator(),
     strategy=EMAStrategy(),

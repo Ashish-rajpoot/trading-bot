@@ -1,45 +1,63 @@
 from __future__ import annotations
 
-from typing import Any
-
 from app.api.client import DeltaRestClient
 
 
 class Products:
     """
-    Client for Delta Exchange Products API.
+    Product service with in-memory caching.
     """
 
     def __init__(self, client: DeltaRestClient) -> None:
         self._client = client
+        self._products: list[dict] | None = None
 
-    def get_products(self) -> dict[str, Any]:
+    def _load_products(self) -> list[dict]:
         """
-        Fetch all products.
+        Load products once and cache them.
         """
-        return self._client.get("/v2/products")
+        if self._products is None:
+            response = self._client.get("/v2/products")
+            self._products = response.get("result", [])
 
-    def get_product(self, product_id: int) -> dict[str, Any]:
-        """
-        Fetch a product by ID.
-        """
-        return self._client.get(f"/v2/products/{product_id}")
+        return self._products
 
-    def find_by_symbol(self, symbol: str) -> dict[str, Any] | None:
+    def refresh(self) -> None:
         """
-        Find a product by its trading symbol.
+        Force refresh the product cache.
         """
-        response = self.get_products()
+        self._products = None
+        self._load_products()
 
-        for product in response["result"]:
-            if product["symbol"] == symbol:
+    def get_products(self) -> list[dict]:
+        """
+        Return all products.
+        """
+        return self._load_products()
+
+    def get_product(self, product_id: int) -> dict | None:
+        """
+        Return a product by product ID.
+        """
+        for product in self._load_products():
+            if product.get("id") == product_id:
+                return product
+
+        return None
+
+    def find_by_symbol(self, symbol: str) -> dict | None:
+        """
+        Return a product by symbol.
+        """
+        for product in self._load_products():
+            if product.get("symbol") == symbol:
                 return product
 
         return None
 
     def get_product_id(self, symbol: str) -> int:
         """
-        Return the product ID for a trading symbol.
+        Return the product ID for a symbol.
         """
         product = self.find_by_symbol(symbol)
 
