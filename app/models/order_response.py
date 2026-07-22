@@ -6,11 +6,12 @@ from dataclasses import dataclass
 @dataclass(slots=True)
 class OrderResponse:
     """
-    Result returned after placing an order.
+    Represents the result of an order execution.
     """
 
     success: bool
-
-    order_id: int | None
-
     message: str
+
+    order_id: int | None = None
+
+    mode: str = "LIVE"

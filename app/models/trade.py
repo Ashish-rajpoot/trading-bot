@@ -24,9 +24,9 @@ class Trade:
 
     take_profit: float
 
-    leverage: int
+    leverage: int = 1
 
-    trading_mode: str
+    trading_mode: str = "PAPER"
 
     created_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -35,32 +35,17 @@ class Trade:
     status: str = "PENDING"
 
     def is_buy(self) -> bool:
-        """
-        Returns True if this is a BUY trade.
-        """
         return self.signal is Signal.BUY
 
     def is_sell(self) -> bool:
-        """
-        Returns True if this is a SELL trade.
-        """
         return self.signal is Signal.SELL
 
+    def mark_simulated(self) -> None:
+        self.status = "SIMULATED"
+
     def mark_filled(self, order_id: int) -> None:
-        """
-        Mark the trade as filled.
-        """
-        self.order_id = order_id
         self.status = "FILLED"
+        self.order_id = order_id
 
     def mark_rejected(self) -> None:
-        """
-        Mark the trade as rejected.
-        """
         self.status = "REJECTED"
-
-    def mark_simulated(self) -> None:
-        """
-        Mark the trade as simulated.
-        """
-        self.status = "SIMULATED"
